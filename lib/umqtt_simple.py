@@ -1,6 +1,9 @@
-import usocket as socket
-import ustruct as struct
-from ubinascii import hexlify
+try:
+    import usocket as socket
+    import ustruct as struct
+    from ubinascii import hexlify
+except ModuleNotFoundError:
+    pass
 
 class MQTTException(Exception):
     pass

@@ -1,0 +1,13 @@
+{
+    "ssid": "smarzony_tel",
+    "psswd": "hasloredmi2",
+    "ssid_old": "smarzony",
+    "psswd_old": "metalisallwhatineed",
+    "broker": "broker.emqx.io",
+    "topic": "qc",
+    "suffix_read": "_r",
+    "suffix_write": "_w",
+    "message_yes": "Tak",
+    "message_no": "Nie",
+    "message_haps": "Haps!"
+}
