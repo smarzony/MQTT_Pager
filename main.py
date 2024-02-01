@@ -34,29 +34,41 @@ class NetworkConnection():
         self.ssid = ssid
         self.password = password
         self.wlan = network.WLAN(network.STA_IF)
+        self.wlan.active(True)
+        self.ifconfig = None
+        if self.isconnected():
+            self.diconnect()
 
     def connect(self):
         # self.wlan = network.WLAN(network.STA_IF)
         if not self.isconnected():
-            print('Connecting to Wi-Fi...')
-            self.wlan.active(True)
+            print('Connecting to Wi-Fi...')            
             self.wlan.connect(self.ssid, self.password)
         
             while not self.isconnected():
                 utime.sleep(1)
                 print("Waiting for connection")
-                pass
+        else:
+            print("Wi-Fi was connected previously!")
 
-        print(f"Wi-Fi connected: {self.ssid}, {self.wlan.ifconfig()}")
+        self.ifconfig = self.wlan.ifconfig()
+        print(f"Wi-Fi connected: {self.ssid}, {self.ifconfig}")
+        if self.ifconfig[0] == '0.0.0.0':
+            print("Connected to empty network! Disconnecting and reconnecting...")
+            self.disconnect()
+            self.connect()           
 
     def isconnected(self):
         return self.wlan.isconnected()
 
     def disconnect(self):
         print("Wi-Fi disconnecting!")
-        # self.wlan.disconnect()
-        self.wlan.active(False)
-        utime.sleep(1)
+        self.wlan.disconnect()
+        while self.isconnected():
+            utime.sleep(1)
+            print("Disconnecting in progress..")
+
+        print("Wi-Fi disconnected!")
 
 def main():
     i2c = I2C(0, scl=Pin(5), sda=Pin(4), freq=400000)
@@ -64,7 +76,7 @@ def main():
     oled = SSD1306_I2C(128, 64, i2c, addr=0x3C)
     oled_ssd = OLED(oled, "header msg")
     network_connection = NetworkConnection(wifi_ssid, wifi_password)
-    network_connection.disconnect()
+    #network_connection.disconnect()
     network_connection.connect()
 
     button_yes = Pin(28, Pin.IN, Pin.PULL_UP)
@@ -98,13 +110,11 @@ def main():
 
         if now - last_wlan_status_time > 5000:
             last_wlan_status_time = utime.ticks_ms()
-            # status = check_wifi_connection()
             status = network_connection.isconnected()
             if not status:
                 oled.fill(0)  # Wyczyść ekran
                 oled.text("Wifi fail!", 0, 0) 
                 oled.show() 
-                network_connection.disconnect()
                 network_connection.connect()
 
         if not messages_q.empty():
