@@ -28,7 +28,7 @@ class Message():
             for _ in range(abs(self.scroll_position)):
                 prefix += " "
             self.visible = prefix+self.text[:self.scroll_position + self.VISIBLE_CHARS]
-            print(f"visible: {self.visible}, pos: {self.scroll_position} pre: {len(prefix)}")
+            # print(f"visible: {self.visible}, pos: {self.scroll_position} pre: {len(prefix)}")
 
         elif self.scroll_position >= 0 and self.scroll_position <= self.VISIBLE_CHARS:
             self.visible = self.text[self.scroll_position:self.scroll_position + self.VISIBLE_CHARS]
@@ -39,27 +39,26 @@ class Message():
                 suffix += " "
                 
             self.visible = self.text[self.scroll_position:self.scroll_position + self.VISIBLE_CHARS]+suffix
-            print(f"visible: {self.visible}, pos: {self.scroll_position} suf: {len(suffix)}")
+            # print(f"visible: {self.visible}, pos: {self.scroll_position} suf: {len(suffix)}")
 
     def __str__(self):   
         return f"Class Message\ttext: {self.text}\tspecial: {self.special}\tscrollable: {self.scrollable}\t"    
 
 class OLED():
-    def __init__(self, display, header) -> None:
+    def __init__(self, display, header, max_messages=3) -> None:
         self.display = display
-        self.max_messages = 3
+        self.max_messages = max_messages
         self.last_messages = []
-        self.header = header
+        self.header = Message(header)
         self.display.fill(0)
         self.display.show()
         print("Display initialised")
 
     def message_parser(self, message):
-        print("d1")
         msg = Message(message)
         print(f"Parsing message: {msg}")
         if msg.special is False:
-            if len(self.last_messages) < 3:
+            if len(self.last_messages) < self.max_messages:
                 self.last_messages.append(msg)
             else:
                 self.last_messages = self.last_messages[1:]
@@ -67,19 +66,36 @@ class OLED():
 
             self.show()
 
+    def messages_purge(self):
+        self.last_messages = []
+
+    def enable_header(self, enable):
+        if enable:
+            self.max_messages = 3
+        else:
+            self.max_messages = 4
+
     def show(self):
         self.display.fill(0)  # Wyczyść ekran
-        self.display.text(self.header, 0, 0)            
-        
-        for index, current_message in enumerate(self.last_messages): 
-            self.display.text(current_message.visible, 0, 16*(index+1))
-            
+        if self.max_messages == 3:
+            self.display.text(self.header.visible, 0, 0)            
+            for index, current_message in enumerate(self.last_messages): 
+                self.display.text(current_message.visible, 0, 16*(index+1))
+        elif self.max_messages > 3:
+            for index, current_message in enumerate(self.last_messages): 
+                self.display.text(current_message.visible, 0, 16*(index))
+
         self.display.show()  
 
     def refresh(self):
+        self.header.scroll()
         for msg in self.last_messages:
             msg.scroll()
-            self.show()
+            
+        self.show()
+
+    def set_header(self, header):
+        self.header = Message(header)
 
 # def prepare_image(oled, image, location):
 #     x = location[0]

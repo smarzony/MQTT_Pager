@@ -1,17 +1,19 @@
-import network
 import utime
-from machine import Pin, I2C, Pin
+from machine import Pin, I2C, Pin, Timer
 import json
 from lib.umqtt_simple import MQTTClient
 from lib.ssd1306 import SSD1306_I2C
 from lib.oled_api import OLED
 from lib.queue import Queue
+from lib.network_api import NetworkConnection
 
 messages_q = Queue()
 
 f = open('config.json')
 config_data = json.load(f)
 f.close()
+
+
 
 wifi_ssid = config_data['ssid']
 wifi_password = config_data['psswd']
@@ -29,78 +31,41 @@ def mqtt_callback(topic, msg):
     print("Message in topic {}: {}".format(topic.decode(), msg.decode())) 
     messages_q.put(msg.decode())
 
-class NetworkConnection():
-    def __init__(self, ssid, password):
-        self.ssid = ssid
-        self.password = password
-        self.wlan = network.WLAN(network.STA_IF)
-        self.wlan.active(True)
-        self.ifconfig = None
-        if self.isconnected():
-            self.diconnect()
-
-    def connect(self):
-        # self.wlan = network.WLAN(network.STA_IF)
-        if not self.isconnected():
-            print('Connecting to Wi-Fi...')            
-            self.wlan.connect(self.ssid, self.password)
-        
-            while not self.isconnected():
-                utime.sleep(1)
-                print("Waiting for connection")
-        else:
-            print("Wi-Fi was connected previously!")
-
-        self.ifconfig = self.wlan.ifconfig()
-        print(f"Wi-Fi connected: {self.ssid}, {self.ifconfig}")
-        if self.ifconfig[0] == '0.0.0.0':
-            print("Connected to empty network! Disconnecting and reconnecting...")
-            self.disconnect()
-            self.connect()           
-
-    def isconnected(self):
-        return self.wlan.isconnected()
-
-    def disconnect(self):
-        print("Wi-Fi disconnecting!")
-        self.wlan.disconnect()
-        while self.isconnected():
-            utime.sleep(1)
-            print("Disconnecting in progress..")
-
-        print("Wi-Fi disconnected!")
-
 def main():
+    button_yes = Pin(28, Pin.IN, Pin.PULL_UP)
+    button_no = Pin(27, Pin.IN, Pin.PULL_UP)
+    button_haps = Pin(26, Pin.IN, Pin.PULL_UP)
     i2c = I2C(0, scl=Pin(5), sda=Pin(4), freq=400000)
     utime.sleep_ms(100)
     oled = SSD1306_I2C(128, 64, i2c, addr=0x3C)
     oled_ssd = OLED(oled, "header msg")
+
+    oled_ssd.enable_header(False)
+    oled_ssd.message_parser("Wi-Fi connecting...")    
+
     network_connection = NetworkConnection(wifi_ssid, wifi_password)
-    #network_connection.disconnect()
-    network_connection.connect()
-
-    button_yes = Pin(28, Pin.IN, Pin.PULL_UP)
-    button_no = Pin(27, Pin.IN, Pin.PULL_UP)
-    button_haps = Pin(26, Pin.IN, Pin.PULL_UP)
-
-    oled.fill(0)  # Wyczyść ekran
-    oled.text("Wifi OK", 0, 0)        
+    ifconfig = network_connection.connect()
+    oled_ssd.message_parser(f"Wi-Fi {wifi_ssid}")
 
     # Inicjalizacja klienta MQTT
+    oled_ssd.message_parser(f"MQTT init")
     client = MQTTClient(mqtt_client_id, mqtt_broker)
     client.set_callback(mqtt_callback)
     client.connect()
-    oled.text("MQTT OK", 0, 16)
+    oled_ssd.message_parser(f"b: {mqtt_broker}")
+    client.subscribe(mqtt_topic_read) 
+    oled_ssd.message_parser(f"Sub: {mqtt_topic_read}")
+    oled_ssd.message_parser(f"Pub: {mqtt_topic_write}")  
+    utime.sleep(1)  
 
-    # Subskrypcja tematu MQTT
-    client.subscribe(mqtt_topic_read)
-    
-    oled.text(f"Sub: {mqtt_topic_read}", 0, 32)
-    oled.text(f"Pub: {mqtt_topic_write}", 0, 48)        
-    oled.show()
+    oled_ssd.enable_header(True)
+    oled_ssd.set_header("Waiting for messages...")
+    oled_ssd.messages_purge()
+    oled_ssd.show()
 
+    print("Main loop starting...")
     last_refresh_time = utime.ticks_ms()
-    last_wlan_status_time = utime.ticks_ms()
+    last_wlan_status_time = utime.ticks_ms()    
     while True:
         now = utime.ticks_ms()
         if now - last_refresh_time > 250:
@@ -112,10 +77,12 @@ def main():
             last_wlan_status_time = utime.ticks_ms()
             status = network_connection.isconnected()
             if not status:
-                oled.fill(0)  # Wyczyść ekran
-                oled.text("Wifi fail!", 0, 0) 
-                oled.show() 
+                oled_ssd.set_header("Wifi disconnected!")
+                oled_ssd.refresh()
                 network_connection.connect()
+                oled_ssd.set_header(f"Wifi {wifi_ssid}")
+            else:                
+                print("Wi-Fi still connected!")                
 
         if not messages_q.empty():
             msg = messages_q.get()
@@ -127,16 +94,19 @@ def main():
             print("button_yes")
             utime.sleep_ms(100)
             client.publish(mqtt_topic_write, message_yes)
+            oled_ssd.set_header(f"Sent {message_yes}")
 
         if not button_no.value():
             print("button_no")
             utime.sleep_ms(100)
             client.publish(mqtt_topic_write, message_no)
+            oled_ssd.set_header(f"Sent {message_no}")
 
         if not button_haps.value():
             print("button_haps")
             utime.sleep_ms(100)
             client.publish(mqtt_topic_write, message_haps)
+            oled_ssd.set_header(f"Sent {message_haps}")
 
         utime.sleep_ms(100)
 
