@@ -5,13 +5,13 @@ class Message():
     VISIBLE_CHARS = 16
     def __init__(self, message):
         self.text = message
-        self.visible = message[:16]
+        self.visible = message[:self.VISIBLE_CHARS]
         self.scroll_position = 0
         if message[0] == "/":
             self.special = True
         else:
             self.special = False
-            if len(message)>16:
+            if len(message)>self.VISIBLE_CHARS:
                 self.scrollable = True                
             else:
                 self.scrollable = False 
