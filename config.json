@@ -1,6 +1,6 @@
 {
-    "ssid_old": "smarzony_tel",
-    "psswd_old": "hasloredmi2",
+    "ssid_test": "smarzony_tel",
+    "psswd_test": "hasloredmi2",
     "ssid": "smarzony",
     "psswd": "metalisallwhatineed",
     "broker": "broker.emqx.io",

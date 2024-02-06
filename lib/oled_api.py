@@ -52,6 +52,7 @@ class OLED():
         self.header = Message(header)
         self.display.fill(0)
         self.display.show()
+        self.image_on_screen = False
         print("Display initialised")
 
     def message_parser(self, message):
@@ -65,11 +66,14 @@ class OLED():
                 self.last_messages.append(msg) 
 
             self.show()
+        else:
+            self.image_on_screen = True
+            
 
     def messages_purge(self):
         self.last_messages = []
 
-    def enable_header(self, enable):
+    def enable_header(self, enable=True):
         if enable:
             self.max_messages = 3
         else:
@@ -95,6 +99,7 @@ class OLED():
         self.show()
 
     def set_header(self, header):
+        self.enable_header()
         self.header = Message(header)
 
 # def prepare_image(oled, image, location):

@@ -1,5 +1,5 @@
 import utime
-from machine import Pin, I2C, Pin, Timer
+from machine import Pin, I2C, Pin, Timer, reset
 import json
 from lib.umqtt_simple import MQTTClient
 from lib.ssd1306 import SSD1306_I2C
@@ -13,10 +13,15 @@ f = open('config.json')
 config_data = json.load(f)
 f.close()
 
+TEST_MODE = True
 
+if TEST_MODE:
+    wifi_ssid = config_data['ssid_test']
+    wifi_password = config_data['psswd_test']
+else:
+    wifi_ssid = config_data['ssid']
+    wifi_password = config_data['psswd']
 
-wifi_ssid = config_data['ssid']
-wifi_password = config_data['psswd']
 mqtt_broker = config_data['broker']
 mqtt_topic_read = config_data['topic']+config_data['suffix_read']
 mqtt_topic_write = config_data['topic']+config_data['suffix_write']
@@ -41,9 +46,9 @@ def main():
     oled_ssd = OLED(oled, "header msg")
 
     oled_ssd.enable_header(False)
-    oled_ssd.message_parser("Wi-Fi connecting...")    
+    # oled_ssd.message_parser("Wi-Fi connecting...")    
 
-    network_connection = NetworkConnection(wifi_ssid, wifi_password)
+    network_connection = NetworkConnection(wifi_ssid, wifi_password, oled_ssd)
     ifconfig = network_connection.connect()
     oled_ssd.message_parser(f"Wi-Fi {wifi_ssid}")
 
@@ -51,21 +56,41 @@ def main():
     oled_ssd.message_parser(f"MQTT init")
     client = MQTTClient(mqtt_client_id, mqtt_broker)
     client.set_callback(mqtt_callback)
-    client.connect()
+    mqtt_fail_counter = 0
+    while True:
+        try:
+            client.connect()
+            break
+        except ECONNABORTED:
+            mqtt_fail_counter += 1
+            if mqtt_fail_counter > 10:
+                oled_ssd.message_parser("RESET")
+                utime.sleep(1)
+                reset()
+
+            print("MQTT failed to connect!")
+            oled_ssd.message_parser(f"{mqtt_fail_counter}. MQTT retry")
+            utime.sleep(1)
+
+        except Exception as e:
+            with open("log.txt", "a") as my_file:
+                my_file.write(f"error: {e}\n")
+
     oled_ssd.message_parser(f"b: {mqtt_broker}")
     client.subscribe(mqtt_topic_read) 
     oled_ssd.message_parser(f"Sub: {mqtt_topic_read}")
     oled_ssd.message_parser(f"Pub: {mqtt_topic_write}")  
-    utime.sleep(1)  
+    utime.sleep(1)
 
-    oled_ssd.enable_header(True)
+    oled_ssd.enable_header()
     oled_ssd.set_header("Waiting for messages...")
     oled_ssd.messages_purge()
     oled_ssd.show()
 
     print("Main loop starting...")
     last_refresh_time = utime.ticks_ms()
-    last_wlan_status_time = utime.ticks_ms()    
+    last_wlan_status_time = utime.ticks_ms()  
+    first_message_received = False  
     while True:
         now = utime.ticks_ms()
         if now - last_refresh_time > 250:
@@ -85,6 +110,9 @@ def main():
                 print("Wi-Fi still connected!")                
 
         if not messages_q.empty():
+            if not first_message_received:
+                oled_ssd.enable_header(False)
+                
             msg = messages_q.get()
             print('element: ', msg)
             oled_ssd.message_parser(msg)
